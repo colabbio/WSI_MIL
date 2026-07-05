@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tenant-wsi-mil-omero-import
+  namespace: colabbio-dev
+  labels:
+    colabbio/tenant: wsi_mil
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: omero-cli
+          image: openmicroscopy/omero-web-standalone:latest
+          command:
+            - /bin/bash
+            - -c
+            - "/app/ingestion/omero-importer.sh"
+          env:
+            - name: OMERO_HOST
+              value: "colabbio-omero-server.colabbio-dev.svc.cluster.local"
+            - name: OMERO_USER
+              value: "root"
+            - name: OMERO_PASSWORD
+              value: "omero"
+          volumeMounts:
+            - name: code-volume
+              mountPath: /app
+            - name: wsi-data
+              mountPath: /mnt/wsi_data
+              readOnly: true
+      volumes:
+        - name: code-volume
+          hostPath:
+            path: /home/jmolmo/git/colabbio/WSI_MIL
+        - name: wsi-data
+          persistentVolumeClaim:
+            claimName: medvfs-wsi-pvc

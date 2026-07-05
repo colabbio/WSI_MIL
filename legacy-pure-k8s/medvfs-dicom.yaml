@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: medvfs-wsi-dicom-pv
+  labels:
+    type: dicom-cache
+spec:
+  storageClassName: dicom-storage
+  capacity:
+    storage: 1Ti
+  accessModes:
+    - ReadOnlyMany
+  hostPath:
+    # In a real cluster, this would be a CSI driver for DICOM or S3.
+    # For this local test, we map to the DICOM generated folder.
+    path: "/data/home/lolmo/histology/DICOM_WSI"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: medvfs-wsi-dicom-pvc
+spec:
+  storageClassName: dicom-storage
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 1Ti
