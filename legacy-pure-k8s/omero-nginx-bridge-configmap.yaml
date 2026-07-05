@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: omero-nginx-bridge-config
+  namespace: colabbio-dev
+data:
+  default.conf: |
+    server {
+        listen 4081;
+        
+        # Sub filter requires uncompressed responses from the backend
+        proxy_set_header Accept-Encoding "";
+
+        location / {
+            proxy_pass http://localhost:4080;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            
+            # CSRF Bypass for IFrame (Spoof Origin and Referer)
+            proxy_set_header Origin "http://$http_host";
+            proxy_set_header Referer "http://$http_host$request_uri";
+            
+            # Rewrite Cookies to allow cross-origin iframe usage (SameSite=Lax for HTTP)
+            proxy_cookie_path / "/; SameSite=Lax";
+            
+            # JS Bridge & Direct CSS Injection
+            sub_filter '</body>' '
+            <style>
+              /* Ocultar UI nativa de OMERO */
+              #middle_header, #left_panel, #trayhandle_right, .left_panel_top, #center_panel_header, #right_panel { display: none !important; }
+              #content { top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; }
+              #center_container { top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; }
+              #center_panel { left: 0 !important; top: 0 !important; width: 100% !important; bottom: 0 !important; height: 100% !important; }
+              #content_details { left: 0 !important; top: 0 !important; width: 100% !important; height: 100% !important; }
+            </style>
+            <script>
+              window.addEventListener("message", function(event) {
+                if (event.data && event.data.action === "inject_css") {
+                  console.log("OMERO JS Bridge: Injecting CSS");
+                  var style = document.createElement("style");
+                  style.innerHTML = event.data.css;
+                  document.head.appendChild(style);
+                }
+              });
+            </script></body>';
+            sub_filter_once off;
+        }
+    }

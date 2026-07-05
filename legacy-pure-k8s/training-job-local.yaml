@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: abmil-training-job
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: abmil-trainer
+          image: colabbio-abmil:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "/app/src/training.py"]
+          # Add actual args required by your script here:
+          # args: ["--data_dir", "/mnt/wsi_data", "--manifest", "/app/datasets/manifest_template.csv"]
+          volumeMounts:
+            - name: wsi-data
+              mountPath: /mnt/wsi_data
+              readOnly: true
+          # resources:
+          #   limits:
+          #     nvidia.com/gpu: 1
+      volumes:
+        - name: wsi-data
+          persistentVolumeClaim:
+            claimName: medvfs-wsi-pvc

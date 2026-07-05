@@ -1,0 +1,29 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: abmil-training-job
+  namespace: colabbio-dev
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+        - name: gcr-secret
+      containers:
+        - name: abmil-trainer
+          image: gcr.io/prevvy1/colabbio/abmil:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "pip install openslide-bin && python /app/src/training.py --metadata_path /mnt/wsi_data/clinical/fhir_patient.csv --training_output /mnt/wsi_data/models"]
+          volumeMounts:
+            - name: wsi-data
+              mountPath: /mnt/wsi_data
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "1000m"
+      volumes:
+        - name: wsi-data
+          hostPath:
+            path: /data/medvfs
+            type: Directory
