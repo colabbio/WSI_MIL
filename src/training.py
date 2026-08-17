@@ -286,7 +286,11 @@ class Trainer:
             patient_path = os.path.join(self.paths["val"], patient_id[0], f"{patient_id[0]}.csv")
             cluster_path = os.path.join(self.paths["val"], patient_id[0], f"{patient_id[0]}_cluster.h5")
         patient_csv = pd.read_csv(patient_path)
-        patient_csv[f"attention_{epoch + 1}"] = A_raw.squeeze(dim=1).squeeze().detach().cpu().numpy()
+        attentions = A_raw.squeeze(dim=1).squeeze().detach().cpu().numpy()
+        if attentions.ndim == 0:
+            attentions = np.array([attentions])
+        
+        patient_csv[f"attention_{epoch + 1}"] = attentions
         instance_labels, instance_probs = self._instance_eval(bags, positional)
 
         instance_labels = [label.cpu().item() if isinstance(label, torch.Tensor) else label for label in
@@ -295,6 +299,11 @@ class Trainer:
 
         patient_csv[f"instance_label_{epoch + 1}"] = np.array(instance_labels)
         patient_csv[f"instance_prob_{epoch + 1}"] = np.array(instance_probs)
+        
+        # Calculate Polarized Attentional Certainty (PAC): PAC_i = A_i * (2 * P_i - 1)
+        pac_scores = attentions * (2 * np.array(instance_probs) - 1)
+        patient_csv[f"pac_{epoch + 1}"] = pac_scores
+        
         patient_csv.to_csv(patient_path, index=False)
 
         #  save cluster info
