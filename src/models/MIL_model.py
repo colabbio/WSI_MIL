@@ -3,7 +3,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
-from snorkel.classification import cross_entropy_with_probs
+try:
+    from snorkel.classification import cross_entropy_with_probs
+except ImportError:
+    def cross_entropy_with_probs(logits, target_probs):
+        log_probs = torch.log_softmax(logits, dim=-1)
+        return -torch.sum(target_probs * log_probs, dim=-1).mean()
+
 import warnings
 warnings.filterwarnings("ignore")
 

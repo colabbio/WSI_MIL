@@ -1,27 +1,51 @@
 #!/bin/bash
-# omero-importer.sh
-# Script operativo para realizar un "In-Place Import" de WSIs a OMERO.
+set -euo pipefail
+# ==============================================================================
+# omero-importer.sh — Legacy Demo Seed Script (Superseded by Proxy/MedVFS on Edge)
+# ==============================================================================
+# NOTA ARQUITECTÓNICA (CB-SPEC-PROXY-VNA-018):
+# En despliegues hospitalarios reales (p. ej. Red Española de Cáncer / SNS / CIBERONC)
+# y en HPC (MareNostrum 5), NO se ejecuta 'omero import':
+#   1. Si el hospital tiene VNA/IMS/OMERO propio -> 'proxy.yaml' (mode: proxy / hybrid-staging)
+#      conecta en Zero-Copy o pre-cachea solo la cohorte aprobada por el DPO en NVMe con TTL.
+#   2. Si las WSIs están en NFS/GPFS -> 'MedVFS' (vfs.yaml) las monta y sirve directamente.
+# Este script SOLO se activa cuando OMERO_PROXY_MODE="local" (entornos Demo Standalone).
+# ==============================================================================
 
-# Variables de entorno esperadas (inyectadas por K8s Job)
-# OMERO_HOST, OMERO_USER, OMERO_PASSWORD
-WSI_MOUNT_DIR="/mnt/wsi_data/BRCA_AWS/BRCA_raw"
-TENANT_GROUP="WSI_MIL_TCGA"
+OMERO_PROXY_MODE="${OMERO_PROXY_MODE:-proxy}"
 
-echo "Logueando en servidor OMERO ($OMERO_HOST)..."
-# omero login -s $OMERO_HOST -u $OMERO_USER -w $OMERO_PASSWORD
+if [[ "${OMERO_PROXY_MODE}" != "local" ]]; then
+    echo "================================================================================"
+    echo "[OMERO-IMPORTER] SKIPPED: OMERO_PROXY_MODE='${OMERO_PROXY_MODE}' (Zero-Copy Proxy / MedVFS activo)."
+    echo "En nodos hospitalarios (Red Española de Cáncer) el acceso a WSI se realiza vía"
+    echo "proxy.yaml (Nginx OMERO Gateway / Orthanc DICOMweb Bridge / MedVFS) sin importar"
+    echo "ni duplicar metadatos en un OMERO.server local."
+    echo "================================================================================"
+    exit 0
+fi
 
-echo "Asegurando que el grupo aislado del Tenant exista: $TENANT_GROUP"
-# omero group add $TENANT_GROUP --perms='rwra--' || echo "Group already exists"
+OMERO_HOST="${OMERO_HOST:-colabbio-omero-server}"
+OMERO_PORT="${OMERO_PORT:-4064}"
+OMERO_USER="${OMERO_USER:-root}"
+OMERO_PASSWORD="${OMERO_PASSWORD:-omero}"
+WSI_MOUNT_DIR="${WSI_MOUNT_DIR:-/mnt/wsi_data/BRCA_AWS/BRCA_raw}"
+TENANT_GROUP="${TENANT_GROUP:-WSI_MIL_TCGA}"
+MAX_IMPORT_BATCH="${MAX_IMPORT_BATCH:-50}"
 
-echo "Buscando ficheros SVS en $WSI_MOUNT_DIR..."
-# Buscamos solo los primeros 5 para este caso de uso piloto
-# for FILE in $(ls $WSI_MOUNT_DIR/*.svs | head -n 5); do
-#     echo "Importando In-Place (symlink): $FILE"
-#     omero import --transfer=ln_s --group=$TENANT_GROUP "$FILE"
-# done
+if ! command -v omero >/dev/null 2>&1; then
+    echo "[OMERO-IMPORTER] 'omero' CLI no instalado en este contenedor; omitiendo seed local."
+    exit 0
+fi
 
-echo "========================================================"
-echo "MODO SIMULACIÓN: Ejecución exitosa de Omero Import"
-echo "En un entorno de producción, los binarios 'omero' registrarían"
-echo "los ficheros vía symlink en la base de datos de OMERO."
-echo "========================================================"
+omero login -s "${OMERO_HOST}" -p "${OMERO_PORT}" -u "${OMERO_USER}" -w "${OMERO_PASSWORD}"
+omero group add "${TENANT_GROUP}" --perms='rwra--' 2>/dev/null || true
+
+shopt -s nullglob
+SLIDE_FILES=("${WSI_MOUNT_DIR}"/*.{svs,ndpi,tif,tiff})
+COUNT=0
+for FILE in "${SLIDE_FILES[@]}"; do
+    (( COUNT >= MAX_IMPORT_BATCH )) && break
+    omero import --transfer=ln_s --group="${TENANT_GROUP}" --skip=all "${FILE}"
+    COUNT=$((COUNT + 1))
+done
+echo "[OMERO-IMPORTER] Modo Demo Local: importadas ${COUNT} WSI(s) en ${TENANT_GROUP}."
