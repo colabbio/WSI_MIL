@@ -1,0 +1,19 @@
+[project]
+name = "wsi-mil"
+version = "0.4.1"
+description = "ColabBio Computational Pathology MIL architectures (ABMIL, TransMIL, CoxMIL, ProtoMIL, MultiTaskMIL)"
+requires-python = ">=3.10,<3.14"
+dependencies = [
+    "torch>=2.2.0",
+    "numpy<2.0.0",
+    "h5py>=3.8.0",
+    "pandas>=2.0.0",
+    "scikit-learn>=1.3.0",
+    "onnx>=1.14.0",
+    "onnxruntime>=1.15.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
