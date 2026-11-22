@@ -2,3 +2,5 @@
 # Added by ColabBio workflow hygiene
 __pycache__/
 *.pyc
+
+.venv/
