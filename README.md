@@ -1,51 +1,36 @@
-# Tenant Pilot: IA de Anatomía Patológica (WSI MIL)
+# WSI_MIL — Interpretable Multiple Instance Learning & Polarized Attentional Certainty (PAC)
 
-Este repositorio contiene el código de investigación del piloto para entrenar un modelo ABMIL (Attention-Based Multiple Instance Learning) utilizando la arquitectura **MedVFS FUSE** de ColabBio.
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-## 1. Diseño Arquitectónico (MedVFS FUSE-First)
+PyTorch implementation of Attention-Based Multiple Instance Learning (**ABMIL**, **TransMIL**, **ProtoMIL**, **CoxMIL**, **MultiTaskMIL**) and **Polarized Attentional Certainty (PAC)** for computational pathology Whole Slide Images (WSIs), designed to consume streaming datasets through **MedVFS** (`cb-vfs`) FUSE mounts.
 
-El factor diferencial de este piloto es que **no utiliza conexiones directas a APIs ni PVCs de almacenamiento crudos**.
-La IA consume todos los datos a través del **Demonio MedVFS (FUSE)** programado en Go, que actúa como puente POSIX-a-FHIR/OMERO en tiempo real.
+## Architecture (MedVFS FUSE-First)
 
-### El Archivo Mágico: `wsi-vfs.yaml`
-Todo el ecosistema de datos del tenant se define centralizadamente en `datasets/wsi-vfs.yaml`.
-Ese archivo le indica a MedVFS cómo conectarse al servidor FHIR, dónde están los SVS locales (o DICOMweb) y dónde está OMERO. Cuando la IA hace `read()`, MedVFS orquesta las llamadas de red por debajo.
+Rather than coupling training code to raw hospital APIs or duplicating terabytes of WSI files onto local PVCs, `WSI_MIL` reads slides and manifests from `/data/vfs` exposed by **MedVFS**:
 
-> **💡 Mantenimiento de Legacy:** Si ejecutas este código en un clúster de Kubernetes que prohíbe Pods con privilegios FUSE (`securityContext.privileged`), revisa la carpeta `legacy-pure-k8s/` y el archivo `legacy-pure-k8s/README.md` para ver cómo correr el pipeline montando PVCs crudos (el método antiguo).
+- `src/models/`: MIL architectures (`AttentionModel.py`, `MIL_model.py`, `TransMIL.py`, `ProtoMIL.py`, `CoxMIL.py`, `MultiTaskMIL.py`).
+- `datasets/wsi-vfs.yaml`: Declarative MedVFS manifest binding FHIR/OMOP clinical metadata, DICOMweb/OMERO imaging, and local/cloud WSI stores.
+- `ingestion/`: ETL helper scripts for populating synthetic/test FHIR and OMERO instances.
+- `legacy-pure-k8s/`: Legacy PVC-based Kubernetes manifests for clusters that restrict privileged FUSE pods.
 
-## 2. Técnica y Estructura
+## Documentation & Thesis
 
-*   `src/`: Código Python del modelo ABMIL.
-    *   `AttentionDataset.py`: Construido para leer de `/data/vfs`, confiando en que MedVFS abstrae la localización real de la imagen.
-*   `datasets/`: Manifiestos.
-    *   `wsi-vfs.yaml`: Configuración central de MedVFS para este tenant.
-*   `ingestion/`: Scripts ETL para ingestar datos externos (Runbooks).
+- **[Polarized Attentional Certainty (PAC) Preprint](https://github.com/colabbio/SlideLab/blob/v2.0/docs/pac_article.md)** — $[-1, 1]$ interpretability metric combining attention magnitude and class-logit certainty across colorectal cancer MSI-H/MSS WSIs and B-ALL flow cytometry.
+- **[SlideLab Preprint](https://github.com/colabbio/SlideLab/blob/v2.0/docs/slidelab_article.md)** — Modular WSI preprocessing, 1,000-WSI TCGA-COAD benchmarks, and zero-disk MedVFS streaming.
+- **[UC San Diego M.S. Thesis Defense Slides (PDF)](https://github.com/colabbio/SlideLab/blob/v2.0/docs/thesis_presentation.pdf)** · **[Open in Google Slides](https://docs.google.com/presentation/d/1AZUdJUrf6N98_nFGE76qFn8rHJB9XNI0SPVWnQrF70k/present)** — Lorenzo Olmo Marchal (2025).
 
-## 3. Operación (Runbook)
+## Quick Start
 
-El ciclo de vida del Tenant asume que primero poblamos las bases de datos maestras y luego dejamos que MedVFS abstraiga la lectura.
-
-### Paso 0: Ingesta Inicial (Poblar el Core)
-Antes de que MedVFS pueda operar, necesitamos inyectar los metadatos clínicos (FHIR) y registrar las imágenes (OMERO). Utiliza los scripts ETL:
 ```bash
-# Inyectar pacientes sintéticos a FHIR
-kubectl apply -f ingestion/ingestion-job.yaml -n colabbio-dev
-
-# (Opcional) Registrar symlinks en OMERO 
-kubectl apply -f legacy-pure-k8s/omero-import-job.yaml -n colabbio-dev
-```
-
-### Paso A: Materialización de Metadatos (Setup)
-MedVFS extrae la estructura tabular desde FHIR y los thumbnails desde OMERO.
-```bash
+# 1. Materialize clinical metadata via MedVFS
 medvfs setup --config datasets/wsi-vfs.yaml
-```
 
-### Paso B: Arrancar Entrenamiento (Streaming FUSE)
-Ejecuta el contenedor de IA inyectando MedVFS como sidecar. La IA leerá la montura local `/data/vfs` a toda velocidad.
-```bash
-# Ejemplo usando Docker local:
+# 2. Mount WSI data via MedVFS FUSE and run training
 docker run -v $(pwd)/datasets/wsi-vfs.yaml:/etc/medvfs/vfs.yaml \
            --privileged \
-           colabbio/medvfs:latest serve --config /etc/medvfs/vfs.yaml
+           ghcr.io/colabbio/medvfs:latest serve --config /etc/medvfs/vfs.yaml
 ```
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE) — Copyright 2026 ColabBio.

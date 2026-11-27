@@ -33,7 +33,7 @@ spec:
       volumes:
         - name: code-volume
           hostPath:
-            path: /home/jmolmo/git/colabbio/WSI_MIL
+            path: /path/to/WSI_MIL
         - name: wsi-data
           persistentVolumeClaim:
             claimName: medvfs-wsi-pvc
